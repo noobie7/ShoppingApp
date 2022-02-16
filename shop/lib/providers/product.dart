@@ -24,23 +24,27 @@ class Product with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> toggleFavoriteStatus() async {
+  Future<void> toggleFavoriteStatus(String token, String userId) async {
     var oldStatus = isFavorite;
     isFavorite = !isFavorite;
     notifyListeners();
     final url = Uri.https(
       'shoppingapp-4967e-default-rtdb.asia-southeast1.firebasedatabase.app',
-      'products/$id.json',
+      'userFavorites/$userId/$id.json',
+      {
+        'auth': token,
+      },
     );
     try {
-      var response = await http.patch(
+      var response = await http.put(
         url,
-        body: json.encode({'isFavorite': isFavorite}),
+        body: json.encode(isFavorite),
       );
       if (response.statusCode >= 400) {
         _setFavValue(oldStatus);
       }
     } catch (error) {
+      print(error);
       _setFavValue(oldStatus);
     }
   }

@@ -3,12 +3,14 @@ import 'package:shop/screens/product_detail_screen.dart';
 import '../providers/product.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart.dart';
+import '../providers/auth.dart';
 
 class ProductItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final product = Provider.of<Product>(context, listen: false);
     final cart = Provider.of<Cart>(context, listen: false);
+    final authData = Provider.of<Auth>(context, listen: false);
     // putting listen to false because only the favorite Icon changes
     // that is now serviced by the Consumer<Product> widget for minimal re-build
     return ClipRRect(
@@ -40,7 +42,7 @@ class ProductItem extends StatelessWidget {
                             : Icons.favorite_border),
                       ),
                       onPressed: () {
-                        product.toggleFavoriteStatus();
+                        product.toggleFavoriteStatus(authData.token as String , authData.userId as String);
                       },
                     ),
                 child: const Text(

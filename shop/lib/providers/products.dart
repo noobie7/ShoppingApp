@@ -5,60 +5,81 @@ import 'product.dart';
 import 'package:http/http.dart' as http;
 
 class Products with ChangeNotifier {
-  List<Product> _items = [];
+  List<Product> items = [];
 
-  List<Product> get items {
-    return [..._items];
+  final String? authToken;
+  final String? userId;
+
+  Products({
+    required this.authToken,
+    required this.items,
+    required this.userId,
+  });
+
+  List<Product> get getItems {
+    return [...items];
   }
 
   List<Product> get favItems {
-    return _items.where((element) => element.isFavorite == true).toList();
+    return items.where((element) => element.isFavorite == true).toList();
   }
 
   Product findById(String id) {
-    return _items.firstWhere((element) => element.id == id);
+    return items.firstWhere((element) => element.id == id);
   }
 
   Future<void> addProduct(Product product) {
     final url = Uri.https(
       'shoppingapp-4967e-default-rtdb.asia-southeast1.firebasedatabase.app',
       'products.json',
+      {
+        'auth': authToken,
+      },
     );
 
     return http
         .post(
       url,
-      body: json.encode({
-        'title': product.title,
-        'description': product.description,
-        'price': product.price,
-        'imageUrl': product.imageUrl,
-        'isFavorite': product.isFavorite,
-      }),
+      body: json.encode(
+        {
+          'title': product.title,
+          'description': product.description,
+          'price': product.price,
+          'imageUrl': product.imageUrl,
+          'creatorId': userId,
+        },
+      ),
     )
-        .then((value) {
-      print(json.decode(value.body));
-      final newProduct = Product(
-        title: product.title,
-        description: product.description,
-        price: product.price,
-        imageUrl: product.imageUrl,
-        id: json.decode(value.body)['name'],
-      );
-      _items.add(newProduct);
-      notifyListeners();
-    }).catchError((error) {
-      print(error);
-      throw error;
-    });
+        .then(
+      (value) {
+        print(json.decode(value.body));
+        final newProduct = Product(
+          title: product.title,
+          description: product.description,
+          price: product.price,
+          imageUrl: product.imageUrl,
+          id: json.decode(value.body)['name'],
+        );
+        items.add(newProduct);
+        notifyListeners();
+      },
+    ).catchError(
+      (error) {
+        print(error);
+        throw error;
+      },
+    );
   }
 
   Future<void> updateProduct(String id, Product product) async {
-    final prodIndex = _items.indexWhere((prod) => prod.id == id);
+    final prodIndex = items.indexWhere((prod) => prod.id == id);
     if (prodIndex >= 0) {
       final url = Uri.https(
         'shoppingapp-4967e-default-rtdb.asia-southeast1.firebasedatabase.app',
         'products/$id.json',
+        {
+          'auth': authToken,
+        },
       );
       http.patch(
         url,
@@ -72,7 +93,7 @@ class Products with ChangeNotifier {
           },
         ),
       );
-      _items[prodIndex] = product;
+      items[prodIndex] = product;
       notifyListeners();
     }
   }
@@ -81,42 +102,68 @@ class Products with ChangeNotifier {
     final url = Uri.https(
       'shoppingapp-4967e-default-rtdb.asia-southeast1.firebasedatabase.app',
       'products/$id.json',
+      {
+        'auth': authToken,
+      },
     );
     print(id);
     final existingProductIndex =
-        _items.indexWhere((element) => element.id == id);
-    var existingProduct = _items[existingProductIndex];
-    _items.removeWhere((element) => element.id == id);
+        items.indexWhere((element) => element.id == id);
+    var existingProduct = items[existingProductIndex];
+    items.removeWhere((element) => element.id == id);
     var response = await http.delete(url);
     if (response.statusCode >= 400) {
       print(response.body);
-      _items.insert(existingProductIndex, existingProduct);
+      items.insert(existingProductIndex, existingProduct);
       notifyListeners();
       throw HttpException('An error occurred');
     }
     notifyListeners();
   }
 
-  Future<void> fetchAndSetProducts() async {
-    final url = Uri.https(
+  Future<void> fetchAndSetProducts([bool filterByUser = false]) async {
+    var param = {
+      'auth': authToken,
+    };
+    if (filterByUser) {
+      param = {
+        'auth': authToken,
+        'orderBy': jsonEncode('creatorId'),
+        'equalTo': jsonEncode(userId),
+      };
+    }
+    var url = Uri.https(
       'shoppingapp-4967e-default-rtdb.asia-southeast1.firebasedatabase.app',
       'products.json',
+      param,
     );
     try {
       final response = await http.get(url);
       final extractedData = json.decode(response.body) as Map<String, dynamic>;
+      print(extractedData);
       final List<Product> loadedProduct = [];
+      url = Uri.https(
+        'shoppingapp-4967e-default-rtdb.asia-southeast1.firebasedatabase.app',
+        'userFavorites/$userId.json',
+        {
+          'auth': authToken,
+        },
+      );
+      final favoriteResponse = await http.get(url);
+      final favoriteData = json.decode(favoriteResponse.body);
+
       extractedData.forEach((prodId, prodData) {
         loadedProduct.add(Product(
           id: prodId,
           title: prodData['title'],
           description: prodData['description'],
           imageUrl: prodData['imageUrl'],
-          isFavorite: prodData['isFavorite'],
           price: prodData['price'],
+          isFavorite:
+              favoriteData == null ? false : favoriteData[prodId] ?? false,
         ));
       });
-      _items = loadedProduct;
+      items = loadedProduct;
       notifyListeners();
     } catch (error) {
       rethrow;
